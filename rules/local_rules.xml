@@ -1,0 +1,61 @@
+<!--
+  Custom Wazuh Detection Rules
+  Purpose: Extend Wazuh's default ruleset with specific correlation rules
+           mapped to MITRE ATT&CK, built and validated in a live lab.
+
+  Install:
+    1. Copy into /var/ossec/etc/rules/local_rules.xml on the Wazuh manager.
+    2. Restart the manager: sudo systemctl restart wazuh-manager
+    3. Validate with: sudo /var/ossec/bin/wazuh-logtest
+
+  Rule ID range 100000-100099 is reserved for custom/local rules by convention.
+
+  NOTE ON RULE IDs: the if_matched_sid / if_sid values below reference
+  Wazuh's default SSH decoder rules. These IDs can vary between
+  Wazuh/OpenSSH versions. Always confirm the correct base rule ID with
+  wazuh-logtest before wiring a correlation rule to it -- in this lab the
+  "expected" ID (5716) turned out to be wrong, then a second guess (5760)
+  was also wrong. The real one firing on this Ubuntu 24.04 + OpenSSH build
+  was 5710 (non-existent user) / 5715 (authentication success).
+-->
+
+<group name="local,">
+
+  <!-- =========================================================
+       T1110.001 - Brute Force: Password Guessing (SSH)
+       Gap: Wazuh's default sshd rules log individual failed
+       logins (level 5) but don't correlate repeated failures
+       from the same source into a single high-severity alert.
+
+       VALIDATED: fired successfully in lab testing (2 alerts
+       generated from a scripted 8-attempt SSH brute-force
+       against a non-existent user, target agent 002).
+       ========================================================= -->
+
+  <rule id="100010" level="10" frequency="6" timeframe="120">
+    <if_matched_sid>5710</if_matched_sid>
+    <same_source_ip />
+    <description>SSH brute force attempt: 6+ failed logins (non-existent user) from same source in 2 minutes</description>
+    <mitre>
+      <id>T1110.001</id>
+    </mitre>
+    <group>authentication_failures,brute_force,</group>
+  </rule>
+
+  <!-- Catches the successful login that follows a brute force
+       burst - this is the actual compromise, not just the attempt.
+       STATUS: written and deployed; not yet confirmed firing in lab
+       (correlation window / timing needs further tuning). -->
+  <rule id="100012" level="14">
+    <if_matched_sid>100010</if_matched_sid>
+    <if_sid>5715</if_sid>
+    <same_source_ip />
+    <description>Possible successful login following SSH brute force burst</description>
+    <mitre>
+      <id>T1110.001</id>
+      <id>T1021.004</id>
+    </mitre>
+    <group>authentication_success,brute_force,</group>
+  </rule>
+
+</group>
