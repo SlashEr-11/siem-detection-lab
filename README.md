@@ -110,5 +110,3 @@ sudo systemctl enable --now wazuh-agent
   once a Windows target is available
 
 ---
-*Built as a hands-on cybersecurity portfolio project. Rules and setup are
-for lab/educational use.*
